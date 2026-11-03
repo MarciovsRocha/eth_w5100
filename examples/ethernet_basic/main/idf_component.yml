@@ -1,0 +1,6 @@
+dependencies:
+  idf: ">=6.0"
+  eth_w5100:
+    version: "*"
+    # The example builds against the driver in this repository
+    override_path: "../../../"

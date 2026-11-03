@@ -1,0 +1,19 @@
+version: "0.1.0"
+description: WIZnet W5100 Ethernet driver (SPI, MACRAW) for ESP-IDF 6.x, integrated with esp_eth and esp_netif
+url: https://github.com/MarciovsRocha/eth_w5100
+license: Unlicense
+targets:
+  - esp32
+tags:
+  - ethernet
+  - w5100
+  - wiznet
+  - spi
+dependencies:
+  idf: ">=6.0"
+files:
+  exclude:
+    - ".github/**/*"
+    - "examples/**/build*/**/*"
+    - "examples/**/sdkconfig"
+    - "examples/**/sdkconfig.old"

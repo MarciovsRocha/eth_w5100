@@ -1,51 +1,42 @@
 
 #include "eth-w5100-ctrl.h"
 
+#include "esp_log.h"
+#include "esp_timer.h"
 #include "eth-w5100-hal.h"
 #include "eth-w5100-reg.h"
 
-#include <stdbool.h>
+static const char *const TAG = "w5100_ctrl";
 
-static uint8_t getS0_IR( void )
-{
-	uint8_t ir_reg;
-
-	if ( !( ir_reg = wiz_r_byte( S0_IR ) ) )
-		return 0;
-
-	wiz_w_byte( S0_IR, ir_reg );
-
-	return ir_reg;
-}
-
-void w5100_init( void )
+esp_err_t w5100_init( void )
 {
 	w5100_internal_init();
 	wiz_w_byte( MR0, MR_RST );
 
+	const int64_t deadline = esp_timer_get_time() + CONFIG_W5100_CMD_TIMEOUT_MS * 1000LL;
 	while ( wiz_r_byte( MR0 ) )
-		;
+		if ( esp_timer_get_time() > deadline )
+		{
+			ESP_LOGE( TAG, "W5100 did not leave reset (MR = 0x%02x). Check MISO, power and /RESET", wiz_r_byte( MR0 ) );
+			return ESP_ERR_TIMEOUT;
+		}
 
+	// All 8 KB of RX and TX memory to socket 0, the only one used in MACRAW mode
 	wiz_w_byte( RMSR, 3 );
 	wiz_w_byte( TMSR, 3 );
+
+	// A floating or shorted MISO reads 0x00/0xFF: the register read back catches a chip that is not there
+	const uint8_t rmsr = wiz_r_byte( RMSR ), tmsr = wiz_r_byte( TMSR );
+	if ( rmsr != 3 || tmsr != 3 )
+	{
+		ESP_LOGE( TAG, "W5100 not answering on SPI (RMSR = 0x%02x, TMSR = 0x%02x). Check wiring, CS and clock", rmsr, tmsr );
+		return ESP_ERR_INVALID_RESPONSE;
+	}
+
+	return ESP_OK;
 }
 
-bool w5100_wasDataReceiceved( void )
-{
-	return ( getS0_IR() & S0_IR_RECV ) == S0_IR_RECV;
-}
-
-void w5100_enablePromiscuousMode( void )
-{
-	wiz_w_byte( S0_MR, wiz_r_byte( S0_MR ) & ~S0_MR_MF );
-}
-
-void w5100_disablePromiscuousMode( void )
-{
-	wiz_w_byte( S0_MR, wiz_r_byte( S0_MR ) | S0_MR_MF );
-}
-
-void w5100_setMAC( uint8_t *mac )
+void w5100_setMAC( const uint8_t *const mac )
 {
 	wiz_w_cont( SHAR0, mac, 6 );
 }

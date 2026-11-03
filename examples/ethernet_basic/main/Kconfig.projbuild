@@ -1,0 +1,40 @@
+menu "Example configuration"
+
+    config EXAMPLE_W5100_SCLK_GPIO
+        int "SCLK GPIO (shield ICSP pin 3)"
+        default 18
+
+    config EXAMPLE_W5100_MISO_GPIO
+        int "MISO GPIO (shield ICSP pin 1)"
+        default 19
+
+    config EXAMPLE_W5100_MOSI_GPIO
+        int "MOSI GPIO (shield ICSP pin 4)"
+        default 23
+
+    config EXAMPLE_W5100_CS_GPIO
+        int "CS GPIO (shield D10)"
+        default 17
+
+    config EXAMPLE_W5100_RST_GPIO
+        int "W5100 /RESET GPIO, -1 if not connected"
+        range -1 33
+        default -1
+        help
+            Keep -1 on Arduino Ethernet shields: their RESET pin is not the W5100 /RESET but the manual
+            reset input of a CAT811 supervisor powered from 5 V (internal pull-up to 5 V), and the
+            supervisor already resets the W5100 at power-up. The driver also resets the chip by software.
+            Use a GPIO only on boards that expose the W5100 /RESET at 3.3 V (see docs/wiring.md).
+
+    config EXAMPLE_W5100_SPI_CLOCK_KHZ
+        int "SPI clock (kHz)"
+        range 100 14000
+        default 4000
+        help
+            The W5100 accepts up to 14 MHz. Lower it if the chip is not detected with long jumper wires.
+
+    config EXAMPLE_PING_COUNT
+        int "Pings sent to the gateway"
+        default 5
+
+endmenu

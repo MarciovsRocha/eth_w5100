@@ -1,0 +1,24 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        idf: [v6.1]
+    container: espressif/idf:${{ matrix.idf }}
+    steps:
+      # The checkout directory is named after the repository (eth_w5100), which is also the component name
+      - uses: actions/checkout@v4
+      - name: Build examples/ethernet_basic
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          cd examples/ethernet_basic
+          idf.py set-target esp32
+          idf.py build

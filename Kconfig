@@ -1,0 +1,61 @@
+menu "W5100 Ethernet (SPI)"
+
+    choice W5100_RX_TASK_CORE
+        prompt "Core of the RX polling task"
+        default W5100_RX_TASK_CORE_0
+        help
+            The W5100 has no usable link/frame interrupt in this driver, so a task polls the chip for
+            received frames. Pin it to the core that runs lwIP (core 0 by default) so time-critical code
+            on the other core is never preempted by network traffic.
+
+        config W5100_RX_TASK_CORE_0
+            bool "Core 0 (PRO CPU)"
+        config W5100_RX_TASK_CORE_1
+            bool "Core 1 (APP CPU)"
+            depends on !FREERTOS_UNICORE
+        config W5100_RX_TASK_NO_AFFINITY
+            bool "No affinity"
+    endchoice
+
+    config W5100_RX_TASK_PRIORITY
+        int "RX polling task priority"
+        range 1 24
+        default 15
+        help
+            FreeRTOS priority of the RX polling task. The IDF Ethernet drivers use 15.
+
+    config W5100_RX_TASK_STACK_SIZE
+        int "RX polling task stack size"
+        range 2048 16384
+        default 4096
+
+    config W5100_RX_POLL_TICKS
+        int "RX poll interval (ticks)"
+        range 1 100
+        default 1
+        help
+            How long the RX task sleeps between polls when the chip has no frame waiting. Each poll costs
+            a few SPI transactions; 1 tick gives the lowest latency. Must be at least 1, otherwise the task
+            never blocks and starves lower priority tasks on its core.
+
+    config W5100_CMD_TIMEOUT_MS
+        int "Chip command timeout (ms)"
+        range 10 5000
+        default 100
+        help
+            Upper bound for every busy wait on the chip (reset, socket commands, TX completion). On timeout
+            the operation fails with an error instead of hanging the calling task.
+
+    menu "Debug"
+        config W5100_DEBUG_TX
+            bool "Dump transmitted frames"
+            help
+                Hex dump of every frame sent to the chip, at debug log level.
+
+        config W5100_DEBUG_RX
+            bool "Dump received frames"
+            help
+                Hex dump of every frame read from the chip, at debug log level.
+    endmenu
+
+endmenu

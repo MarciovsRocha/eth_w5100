@@ -11,11 +11,11 @@
 #define S0_IR	   0x402
 #define S0_SR	   0x403
 #define S0_TX_FSR0 0x420
-#define S0_TX_RD0  0x422
+#define S0_TX_RD0  0x422 /**< Sn_TX_RR in the datasheet */
 #define S0_TX_WR0  0x424
 #define S0_RX_RSR0 0x426
 #define S0_RX_RD0  0x428
-#define S0_RX_WR0  0x42A
+// 0x042A-0x042B (an RX write pointer on later chips) is "Reserved" in the W5100 datasheet v1.2.8
 
 #define MR_RST 0x80 /**< reset */
 #define MR_PB  0x10 /**< ping block */

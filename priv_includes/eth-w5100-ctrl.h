@@ -1,11 +1,9 @@
 
 #pragma once
 
-#include <stdbool.h>
+#include "esp_err.h"
+
 #include <stdint.h>
 
-void w5100_init( void );
-bool w5100_wasDataReceiceved( void );
-void w5100_enablePromiscuousMode( void );
-void w5100_disablePromiscuousMode( void );
-void w5100_setMAC( uint8_t *mac );
+esp_err_t w5100_init( void );
+void w5100_setMAC( const uint8_t *const mac );

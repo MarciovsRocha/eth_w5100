@@ -1,11 +1,20 @@
 
 #include "eth-w5100-socket.h"
 
+#include "esp_eth_spec.h"
+#include "esp_log.h"
+#include "esp_timer.h"
 #include "eth-w5100-hal.h"
 #include "eth-w5100-reg.h"
-#include "sys/param.h"
 
-#include <stdlib.h>
+#include <inttypes.h>
+
+static const char *const TAG = "w5100_socket";
+
+static int64_t deadline_us( void )
+{
+	return esp_timer_get_time() + CONFIG_W5100_CMD_TIMEOUT_MS * 1000LL;
+}
 
 static uint16_t read_uint16_reg( const uint16_t addr )
 {
@@ -21,6 +30,7 @@ static void write_uint16_reg( const uint16_t addr, const uint16_t data )
 	wiz_w_cont( addr, ( const uint8_t *const )&( uint16_t ) { __builtin_bswap16( data ) }, 2 );
 }
 
+// The chip may update these 16-bit counters between the two byte reads: read until two reads agree
 static uint16_t getS0_XX_XSR( const uint16_t addr )
 {
 	uint16_t first_read, second_read;
@@ -32,10 +42,23 @@ static uint16_t getS0_XX_XSR( const uint16_t addr )
 	return __builtin_bswap16( first_read );
 }
 
-static void send_data_processing( const uint8_t *data, const uint16_t len )
+static esp_err_t exec_cmd( const uint8_t cmd )
 {
-	uint16_t ptr = read_uint16_reg( S0_TX_WR0 );
-	uint16_t size;
+	wiz_w_byte( S0_CR, cmd );
+
+	const int64_t deadline = deadline_us();
+	while ( wiz_r_byte( S0_CR ) )
+		if ( esp_timer_get_time() > deadline )
+		{
+			ESP_LOGE( TAG, "socket command 0x%02x timed out", cmd );
+			return ESP_ERR_TIMEOUT;
+		}
+
+	return ESP_OK;
+}
+
+static void write_tx_buf( const uint16_t ptr, const uint8_t *data, const uint16_t len )
+{
 	uint16_t dst_mask = ptr & SMASK;
 	uint16_t dst_ptr = SBUFBASEADDRESS + dst_mask;
 
@@ -43,17 +66,15 @@ static void send_data_processing( const uint8_t *data, const uint16_t len )
 		wiz_w_cont( dst_ptr, data, len );
 	else
 	{
-		size = SSIZE - dst_mask;
+		uint16_t size = SSIZE - dst_mask;
 		wiz_w_cont( dst_ptr, data, size );
 		data += size;
 		size = len - size;
 		wiz_w_cont( SBUFBASEADDRESS, data, size );
 	}
-
-	write_uint16_reg( S0_TX_WR0, ptr + len );
 }
 
-static void read_data( const uint16_t src_addr, uint8_t *const dst, const uint16_t len )
+static void read_rx_buf( const uint16_t src_addr, uint8_t *dst, const uint16_t len )
 {
 	uint16_t src_mask = src_addr & RMASK;
 	uint16_t real_src_addr = RBUFBASEADDRESS + src_mask;
@@ -63,85 +84,112 @@ static void read_data( const uint16_t src_addr, uint8_t *const dst, const uint16
 	else
 	{
 		uint16_t size = RSIZE - src_mask;
-		uint8_t *const dst_offset = dst;
-		wiz_r_cont( real_src_addr, dst_offset, size );
-		*( uint8_t ** )&dst_offset += size;
+		wiz_r_cont( real_src_addr, dst, size );
+		dst += size;
 		size = len - size;
-		wiz_r_cont( RBUFBASEADDRESS, dst_offset, size );
+		wiz_r_cont( RBUFBASEADDRESS, dst, size );
 	}
 }
 
-void w5100_socket_open( void )
+esp_err_t w5100_socket_open( const bool mac_filter )
 {
-	do
+	// The datasheet only describes writing Sn_MR before OPEN, so the MAC filter is changed by reopening the socket
+	for ( int attempt = 0; attempt < 3; ++attempt )
 	{
 		w5100_socket_close();
-		wiz_w_byte( S0_MR, S0_MR_MACRAW );
-		wiz_w_byte( S0_CR, S0_CR_OPEN );
+		wiz_w_byte( S0_MR, S0_MR_MACRAW | ( mac_filter ? S0_MR_MF : 0 ) );
 
-		while ( wiz_r_byte( S0_CR ) )
-			;
-	} while ( wiz_r_byte( S0_SR ) != SOCK_MACRAW );
+		if ( exec_cmd( S0_CR_OPEN ) == ESP_OK && wiz_r_byte( S0_SR ) == SOCK_MACRAW )
+			return ESP_OK;
+	}
+
+	ESP_LOGE( TAG, "could not open socket 0 in MACRAW mode (SR = 0x%02x)", wiz_r_byte( S0_SR ) );
+	return ESP_FAIL;
 }
 
 void w5100_socket_close( void )
 {
-	do
-		wiz_w_byte( S0_CR, S0_CR_CLOSE );
-	while ( wiz_r_byte( S0_CR ) );
-
-	do
-		wiz_w_byte( S0_IR, 0xFF );
-	while ( wiz_r_byte( S0_IR ) );
+	exec_cmd( S0_CR_CLOSE );
+	wiz_w_byte( S0_IR, 0xFF );
 }
 
-uint16_t w5100_socket_send( const uint8_t *const buf, const uint16_t len )
+esp_err_t w5100_socket_send( const struct w5100_tx_part *const parts, const size_t count )
 {
-	uint16_t data_remaining = len;
+	uint32_t total = 0;
 
-	while ( data_remaining )
+	for ( size_t i = 0; i < count; ++i )
+		total += parts[ i ].len;
+
+	// A MACRAW frame must go out in a single SEND, so it has to fit the TX buffer at once
+	if ( !total || total > SSIZE )
+		return ESP_ERR_INVALID_SIZE;
+
+	const int64_t deadline = deadline_us();
+	while ( getS0_XX_XSR( S0_TX_FSR0 ) < total )
+		if ( esp_timer_get_time() > deadline )
+		{
+			ESP_LOGE( TAG, "no room in TX buffer for %" PRIu32 " bytes", total );
+			return ESP_ERR_TIMEOUT;
+		}
+
+	uint16_t ptr = read_uint16_reg( S0_TX_WR0 );
+
+	for ( size_t i = 0; i < count; ++i )
 	{
-		uint16_t avail_sz = getS0_XX_XSR( S0_TX_FSR0 );
-
-		if ( !avail_sz )
-			continue;
-
-		uint16_t sz_to_be_sent = MIN( avail_sz, data_remaining );
-
-		send_data_processing( buf + len - data_remaining, sz_to_be_sent );
-
-		wiz_w_byte( S0_CR, S0_CR_SEND );
-
-		while ( wiz_r_byte( S0_CR ) )
-			;
-
-		while ( !( wiz_r_byte( S0_IR ) & S0_IR_SEND_OK ) )
-			;
-
-		data_remaining -= sz_to_be_sent;
+		write_tx_buf( ptr, parts[ i ].buf, ( uint16_t )parts[ i ].len );
+		ptr += parts[ i ].len;
 	}
 
-	return len;
+	write_uint16_reg( S0_TX_WR0, ptr );
+
+	esp_err_t ret = exec_cmd( S0_CR_SEND );
+	if ( ret != ESP_OK )
+		return ret;
+
+	while ( !( wiz_r_byte( S0_IR ) & S0_IR_SEND_OK ) )
+		if ( esp_timer_get_time() > deadline )
+		{
+			ESP_LOGE( TAG, "SEND_OK not raised" );
+			return ESP_ERR_TIMEOUT;
+		}
+
+	// Clear only our bit: the RX side never touches S0_IR
+	wiz_w_byte( S0_IR, S0_IR_SEND_OK );
+
+	return ESP_OK;
 }
 
-uint16_t w5100_socket_recv( uint8_t **const buf )
+esp_err_t w5100_socket_rx_peek( uint16_t *const frame_len )
 {
-	uint16_t data_len, ptr = read_uint16_reg( S0_RX_RD0 );
+	const uint16_t received = getS0_XX_XSR( S0_RX_RSR0 );
 
-	read_data( ptr, ( uint8_t * )&data_len, 2 );
-	ptr += 2;
-	data_len = __builtin_bswap16( data_len ) - 2;
+	if ( !received )
+		return ESP_ERR_NOT_FOUND;
 
-	if ( !( *buf = malloc( data_len ) ) )
-		return 0;
+	// Every MACRAW frame is preceded by its length, big endian, counting these 2 bytes
+	uint16_t header;
+	read_rx_buf( read_uint16_reg( S0_RX_RD0 ), ( uint8_t * )&header, 2 );
+	header = __builtin_bswap16( header );
 
-	read_data( ptr, *buf, data_len );
-	write_uint16_reg( S0_RX_RD0, ptr + data_len );
+	if ( header < 2 + ETH_HEADER_LEN || header > 2 + ETH_MAX_PACKET_SIZE || header > received )
+	{
+		ESP_LOGW( TAG, "RX ring out of sync (frame header %u, %u bytes received)", header, received );
+		return ESP_ERR_INVALID_SIZE;
+	}
 
-	wiz_w_byte( S0_CR, S0_CR_RECV );
+	*frame_len = header - 2;
 
-	while ( wiz_r_byte( S0_CR ) )
-		;
+	return ESP_OK;
+}
 
-	return data_len;
+esp_err_t w5100_socket_rx_consume( uint8_t *const buf, const uint16_t frame_len )
+{
+	const uint16_t ptr = read_uint16_reg( S0_RX_RD0 ) + 2;
+
+	if ( buf )
+		read_rx_buf( ptr, buf, frame_len );
+
+	write_uint16_reg( S0_RX_RD0, ptr + frame_len );
+
+	return exec_cmd( S0_CR_RECV );
 }
