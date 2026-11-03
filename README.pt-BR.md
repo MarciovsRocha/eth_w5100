@@ -7,8 +7,8 @@ Driver `esp_eth` (MAC/PHY) para o **WIZnet W5100**, o chip do Arduino Ethernet S
 mudanças: esp-mqtt, esp_http_client, SNTP, DNS e sockets.
 
 > **Status: 0.1.0.** Compila no ESP-IDF 6.1, conferido pelo CI a cada push. **Ainda não foi testado em
-> hardware.** O primeiro teste num Arduino Ethernet Shield real está pendente, e o resultado vai para o
-> [CHANGELOG.md](CHANGELOG.md).
+> hardware.** O primeiro teste num Arduino Ethernet Shield real está pendente. Quando ele passar, a primeira
+> versão validada será a 0.2.0, com o resultado registrado no [CHANGELOG.md](CHANGELOG.md).
 
 ## Por que um driver para o W5100?
 
@@ -37,7 +37,7 @@ esquemático do Arduino Ethernet Shield.
    dependencies:
      eth_w5100:
        git: https://github.com/MarciovsRocha/eth_w5100.git
-       version: "main"   # a tag v0.1.0 sai depois da primeira validação em hardware
+       version: "main"   # a tag v0.2.0 sai depois da primeira validação em hardware
    ```
 
 2. Siga o exemplo de código do [README.md](README.md#quick-start), ou o programa completo em

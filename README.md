@@ -9,8 +9,8 @@ An `esp_eth` MAC/PHY driver for the WIZnet **W5100**, the chip on the classic Ar
 esp-mqtt, esp_http_client, SNTP, DNS, sockets.
 
 > **Status: 0.1.0.** It builds on ESP-IDF 6.1, checked by CI on every push. **It has not been tested on
-> hardware yet.** The first test on a real Arduino Ethernet Shield is pending, and results will be recorded in
-> [CHANGELOG.md](CHANGELOG.md).
+> hardware yet.** The first test on a real Arduino Ethernet Shield is pending. Once it passes, the first
+> validated release will be 0.2.0, with the results recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## Why a driver for the W5100?
 
@@ -39,7 +39,7 @@ schematic.
    dependencies:
      eth_w5100:
        git: https://github.com/MarciovsRocha/eth_w5100.git
-       version: "main"   # a v0.1.0 tag follows the first hardware validation
+       version: "main"   # a v0.2.0 tag follows the first hardware validation
    ```
 
 2. Bring up the interface:

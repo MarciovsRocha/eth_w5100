@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.1.0 (unreleased hardware validation)
+## 0.2.0 (planned)
+
+The first release validated on hardware. It is tagged `v0.2.0` once the acceptance tests in section 5 of
+[docs/porting-notes.md](docs/porting-notes.md) pass on a real Arduino Ethernet Shield, and their results are
+recorded here.
+
+## 0.1.0 (not tagged, not yet tested on hardware)
 
 The first release of the ESP-IDF 6.x port of [KaeLL/w5100_esp32](https://github.com/KaeLL/w5100_esp32) at
 commit `2820651`.
@@ -15,4 +21,4 @@ commit `2820651`.
 - API: `eth_init()` now returns `esp_err_t`. `eth_deinit()`, `eth_get_netif()` and `eth_get_handle()` are always
   available. The Kconfig options were renamed from `EMAC_*` to `W5100_*`.
 
-**Not yet tested on hardware.** See section 5 of the porting notes for the acceptance tests.
+**Not yet tested on hardware.** See section 5 of the porting notes for the acceptance tests for 0.2.0.
