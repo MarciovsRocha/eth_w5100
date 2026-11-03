@@ -39,7 +39,7 @@ schematic.
    dependencies:
      eth_w5100:
        git: https://github.com/MarciovsRocha/eth_w5100.git
-       version: "v0.1.0"
+       version: "main"   # a v0.1.0 tag follows the first hardware validation
    ```
 
 2. Bring up the interface:
@@ -63,8 +63,21 @@ schematic.
    // wait for IP_EVENT_ETH_GOT_IP, then use any lwIP based API
    ```
 
-The complete program is [examples/ethernet_basic](examples/ethernet_basic). It gets an address by DHCP and
-pings the gateway. A reply proves that both TX and RX work end to end.
+The network configures itself: by default the interface gets its address, gateway and DNS server by DHCP,
+as soon as the cable is plugged into a network with a DHCP server. A static address can be set through
+`ifcfg.sip`.
+
+The complete program is [examples/ethernet_basic](examples/ethernet_basic), a self-test in six stages. Each stage
+prints PASS, FAIL or SKIP, and a summary comes at the end:
+
+| Stage | What it proves |
+|---|---|
+| SPI | The W5100 answers on the bus |
+| DHCP | Address, gateway and DNS were obtained from the network |
+| PING | The gateway answers ICMP, so TX and RX both work |
+| DNS | A public name resolves (default `example.com`) |
+| TCP | An HTTP `HEAD` to that host gets an answer over the internet |
+| MQTT | A message published to the broker comes back on its own subscription (default `mqtt://test.mosquitto.org`) |
 
 ```bash
 cd examples/ethernet_basic

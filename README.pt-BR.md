@@ -37,12 +37,25 @@ esquemático do Arduino Ethernet Shield.
    dependencies:
      eth_w5100:
        git: https://github.com/MarciovsRocha/eth_w5100.git
-       version: "v0.1.0"
+       version: "main"   # a tag v0.1.0 sai depois da primeira validação em hardware
    ```
 
 2. Siga o exemplo de código do [README.md](README.md#quick-start), ou o programa completo em
-   [examples/ethernet_basic](examples/ethernet_basic). Ele obtém IP por DHCP e faz ping no gateway; uma resposta
-   prova que TX e RX funcionam de ponta a ponta.
+   [examples/ethernet_basic](examples/ethernet_basic).
+
+A rede se configura sozinha: por padrão a interface obtém IP, gateway e servidor DNS por DHCP assim que o cabo é
+ligado numa rede com servidor DHCP. Um IP fixo pode ser definido em `ifcfg.sip`.
+
+O exemplo é um autoteste em seis etapas, cada uma com PASS, FAIL ou SKIP e um resumo no final:
+
+| Etapa | O que prova |
+|---|---|
+| SPI | O W5100 responde no barramento |
+| DHCP | IP, gateway e DNS foram obtidos da rede |
+| PING | O gateway responde ao ICMP, então TX e RX funcionam |
+| DNS | Um nome público é resolvido (padrão `example.com`) |
+| TCP | Um `HEAD` HTTP para esse host é respondido pela internet |
+| MQTT | Uma mensagem publicada no broker volta pela própria assinatura (padrão `mqtt://test.mosquitto.org`) |
 
 ## Ligação (Arduino Ethernet Shield → ESP32)
 

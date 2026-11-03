@@ -37,4 +37,17 @@ menu "Example configuration"
         int "Pings sent to the gateway"
         default 5
 
+    config EXAMPLE_TEST_HOST
+        string "Internet host for the DNS and TCP stages"
+        default "example.com"
+        help
+            Resolved by DNS, then sent an HTTP HEAD request on port 80.
+
+    config EXAMPLE_MQTT_URI
+        string "MQTT broker URI (empty skips the MQTT stage)"
+        default "mqtt://test.mosquitto.org"
+        help
+            The test subscribes to eth_w5100/selftest/<MAC> and publishes one message to it. For a broker on
+            the local network use for example mqtt://192.168.0.10:1883.
+
 endmenu
