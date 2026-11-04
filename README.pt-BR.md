@@ -7,7 +7,8 @@ Driver `esp_eth` (MAC/PHY) para o **WIZnet W5100**, o chip do Arduino Ethernet S
 mudanças: esp-mqtt, esp_http_client, SNTP, DNS e sockets.
 
 > **Status: 0.1.0.** Compila no ESP-IDF 6.1, conferido pelo CI a cada push. O autoteste abaixo **passa num shield
-> real**, um clone HanRun numa NodeMCU-32S. Os testes de aceitação que faltam estão em
+> real**, um clone HanRun numa NodeMCU-32S. Há um problema em aberto: depois de um liga-desliga rápido da energia do
+> shield, o chip voltou, mas o TCP não. Esse problema e os testes de aceitação que faltam estão em
 > [docs/porting-notes.md](docs/porting-notes.md#5-hardware-validation). A primeira versão com tag será a 0.2.0.
 
 ## Por que um driver para o W5100?
@@ -83,7 +84,8 @@ Nenhum desses pinos do ESP32 tem função de *strapping* no boot. A explicação
 - **O link é sempre informado como ativo.** O W5100 não tem registrador de status do PHY, então um cabo
   desconectado não é detectado pelo driver. Use timeouts na aplicação, como o keepalive do MQTT.
 - **O driver restaura o chip, não a conexão.** Se o shield perder a alimentação, o driver restaura o chip em cerca
-  de 2 s, e o TCP se recupera pelos próprios timeouts.
+  de 2 s, e o TCP se recupera pelos próprios timeouts. Isso funcionou depois de um corte único, mas não depois de um
+  liga-desliga rápido.
 - **Polling, sem interrupção.** O pino INT não é usado.
 - **Vazão.** O protocolo SPI do W5100 transfere 1 byte por quadro de 32 bits. A 4 MHz isso dá uma estimativa de
   algumas dezenas de kB/s: serve para telemetria e MQTT, não para transferências grandes. Ainda não foi medido.

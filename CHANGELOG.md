@@ -10,7 +10,9 @@ of [docs/porting-notes.md](docs/porting-notes.md) pass.
 - The wiring guide now says to power the shield directly from 5 V. Fed through the ESP32 board's VIN pin, the
   tested shield received almost no frames.
 - The driver checks the chip every 2 s and restores it if it lost its configuration, for example after a power
-  loss on the shield. This has not been tested on hardware yet.
+  loss on the shield. This worked after a single power cut. After a fast on-off flap the chip was restored, but TCP
+  did not recover: see section 5 of the porting notes.
+- Adds the tools used in these tests, in `tests/hardware`.
 - `w5100_init()` waits 10 ms after the software reset for the PLL to lock.
 
 ## 0.1.0 (not tagged)

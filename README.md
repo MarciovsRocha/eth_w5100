@@ -9,7 +9,8 @@ An `esp_eth` MAC/PHY driver for the WIZnet **W5100**, the chip on the classic Ar
 esp-mqtt, esp_http_client, SNTP, DNS, sockets.
 
 > **Status: 0.1.0.** It builds on ESP-IDF 6.1, checked by CI on every push. The self-test below **passes on a
-> real shield**, a HanRun clone on a NodeMCU-32S. The remaining acceptance tests are listed in
+> real shield**, a HanRun clone on a NodeMCU-32S. One problem is open: after the shield's power was switched off and
+> on quickly, the chip came back but TCP did not. This and the remaining acceptance tests are in
 > [docs/porting-notes.md](docs/porting-notes.md#5-hardware-validation). The first tagged release will be 0.2.0.
 
 ## Why a driver for the W5100?
@@ -124,7 +125,7 @@ strapping pins to avoid.
 - **Link is always reported up.** The W5100 has no PHY status register, so a pulled cable is not detected by the
   driver. Use application-level timeouts, for example the MQTT keepalive.
 - **The chip is restored, not the link.** If the shield loses power, the driver restores the chip within about
-  2 s, and TCP recovers through its own timeouts.
+  2 s, and TCP recovers through its own timeouts. This worked after a single power cut, but not after a fast flap.
 - **Polling, no interrupt.** The INT pin is not used. An idle poll costs a few SPI transactions per tick on the
   RX task's core.
 - **Throughput.** The W5100 SPI protocol moves one byte per 32-bit frame. At the default 4 MHz that is an

@@ -98,12 +98,34 @@ a separate 5 V source (an Arduino UNO's 5V pin). The test was on 2026-11-03.
 | LAN broadcasts of 72, 162, 350 and 600 bytes, read every 10 ms by a test firmware without this driver | 20 of 20 |
 | Frame header | The length includes its own 2 bytes: frames are parsed intact |
 | MQTT QoS 1, a backlog of 67 records in 4 batches, each deleted on its PUBACK | All delivered, with no duplicates or gaps |
+| Network cable out for about 35 s, with traffic queued | TCP or the MQTT client recovers, with no restart and nothing lost |
+| Shield power cut once for about 14 s | Detected and restored, the broker comes back about 25 s later, and nothing is lost |
+| **Shield power switched off and on quickly** | **Failed:** see below |
 
-Still to do for 0.2.0:
+The tools are in [tests/hardware](../tests/hardware/README.md).
 
-- Behaviour when the cable is unplugged and plugged back in. The link is not detected, so TCP must recover by its
-  own timeouts.
+### Open problem: no network after a fast power flap
+
+The driver detected the power loss and logged `W5100 restored` once the chip answered on SPI again, with no SPI errors
+after that. All 6 TCP connection attempts in the next 2 minutes timed out. A mechanical knock on the shield then
+ended the test, and the board still has a bad contact after its jumper wires were replaced. The ESP32 did not restart.
+
+Nothing is confirmed, because the log does not show whether frames were going in or out. The possible causes are:
+
+| Hypothesis | For it | How to check |
+|---|---|---|
+| Bad contact on the shield | It remains with new jumper wires | Clean the contacts or try another shield, then repeat |
+| The chip recovers only in part: registers answer, but the PHY does not | A single cut recovered, and the flap did not | Repeat the flap on a board with good contacts |
+| Weak 5 V after reconnecting | Same symptom as powering through VIN | Measure 5 V on the shield after the flap |
+| Driver or lwIP state | Less likely: the same path worked after the single cut | Frame counters in the log |
+
+These driver changes are proposed, but **not implemented** until the flap can be tested again: frame counters in the
+log, a chip reset when no frame arrives for 60 s, and a limit on the unbounded loop in `getS0_XX_XSR`.
+
+### Still to do for 0.2.0
+
+- The open problem above.
 - Sustained traffic over many hours.
-- The shield powered on after the ESP32, and losing power while running. Both are implemented, but not tested.
+- The shield powered on after the ESP32. This is handled by retrying `eth_init()`, but not tested.
 - Measured throughput and CPU load of the RX task at 4 and 14 MHz.
 - Promiscuous mode on and off at runtime. Turning it on at startup was tested.
