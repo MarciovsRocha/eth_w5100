@@ -8,9 +8,9 @@ An `esp_eth` MAC/PHY driver for the WIZnet **W5100**, the chip on the classic Ar
 **ESP-IDF 6.x**. It plugs into `esp_netif`, so everything built on lwIP works over the cable unchanged:
 esp-mqtt, esp_http_client, SNTP, DNS, sockets.
 
-> **Status: 0.1.0.** It builds on ESP-IDF 6.1, checked by CI on every push. **It has not been tested on
-> hardware yet.** The first test on a real Arduino Ethernet Shield is pending. Once it passes, the first
-> validated release will be 0.2.0, with the results recorded in [CHANGELOG.md](CHANGELOG.md).
+> **Status: 0.1.0.** It builds on ESP-IDF 6.1, checked by CI on every push. The self-test below **passes on a
+> real shield**, a HanRun clone on a NodeMCU-32S. The remaining acceptance tests are listed in
+> [docs/porting-notes.md](docs/porting-notes.md#5-hardware-validation). The first tagged release will be 0.2.0.
 
 ## Why a driver for the W5100?
 
@@ -94,13 +94,16 @@ idf.py -p PORT flash monitor
 | MOSI | ICSP pin 4 | GPIO23 |
 | W5100 CS | D10 | GPIO17 |
 | SD card CS | D4 | 3V3 (keeps the SD card off the bus) |
-| 5 V | 5V | VIN / 5V |
+| 5 V | 5V | a 5 V supply, **not the ESP32's VIN** |
 | GND | GND | GND |
 | RESET | — | **not connected** (it is a 5 V supervisor input, see below) |
 
+**Power the shield directly from the 5 V supply.** Fed through the ESP32 board's VIN pin, the tested shield
+received almost no frames, even though SPI kept working and DHCP requests went out.
+
 All of these ESP32 pins are free of boot strapping functions. The full explanation is in
-[docs/wiring.md](docs/wiring.md), which covers the voltages, why RESET stays unconnected, and the strapping
-pins to avoid.
+[docs/wiring.md](docs/wiring.md), which covers power, the voltages, why RESET stays unconnected, and the
+strapping pins to avoid.
 
 ## Configuration (`idf.py menuconfig` → W5100 Ethernet (SPI))
 
@@ -120,6 +123,8 @@ pins to avoid.
   is unaffected. The driver warns once at startup.
 - **Link is always reported up.** The W5100 has no PHY status register, so a pulled cable is not detected by the
   driver. Use application-level timeouts, for example the MQTT keepalive.
+- **The chip is restored, not the link.** If the shield loses power, the driver restores the chip within about
+  2 s, and TCP recovers through its own timeouts.
 - **Polling, no interrupt.** The INT pin is not used. An idle poll costs a few SPI transactions per tick on the
   RX task's core.
 - **Throughput.** The W5100 SPI protocol moves one byte per 32-bit frame. At the default 4 MHz that is an

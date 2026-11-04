@@ -1,6 +1,7 @@
 
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "eth-w5100-ctrl.h"
 #include "eth-w5100-if.h"
 #include "eth-w5100-socket.h"
@@ -20,6 +21,7 @@
 
 #define W5100_RX_BURST	   8  // frames read per poll before the task yields
 #define W5100_TX_MAX_PARTS 8  // buffers accepted by transmit_ctrl_vargs
+#define W5100_CHECK_US	   ( 2000 * 1000LL )  // how often the chip's state is checked
 
 #if CONFIG_W5100_RX_TASK_CORE_0
 #define W5100_RX_TASK_CORE 0
@@ -42,6 +44,7 @@ typedef struct
 	bool promiscuous;
 	bool socket_open;
 	bool multicast_warned;
+	bool chip_lost;
 } emac_w5100_t;
 
 static const char *TAG = "w5100_eth_mac";
@@ -131,7 +134,7 @@ static void emac_w5100_poll_rx( emac_w5100_t *emac )
 		uint8_t *frame = NULL;
 
 		lock( emac );
-		esp_err_t ret = w5100_socket_rx_peek( &frame_len );
+		esp_err_t ret = emac->socket_open ? w5100_socket_rx_peek( &frame_len ) : ESP_ERR_INVALID_STATE;
 		if ( ret == ESP_OK )
 		{
 			// On allocation failure the frame is still consumed, so the RX ring does not stall
@@ -163,17 +166,52 @@ static void emac_w5100_poll_rx( emac_w5100_t *emac )
 	}
 }
 
+// A shield on its own supply can lose power or a wire while the ESP32 keeps running. The chip then comes back with
+// its configuration cleared and the socket closed. lwIP keeps its address, so restoring the chip is enough.
+static void emac_w5100_check_chip( emac_w5100_t *emac )
+{
+	lock( emac );
+	if ( !emac->socket_open || !w5100_socket_is_open() )
+	{
+		if ( !emac->chip_lost )
+			ESP_LOGW( TAG, "W5100 lost its configuration: check the shield's power and wires, retrying" );
+		emac->chip_lost = true;
+		emac->socket_open = false;
+		if ( w5100_init() == ESP_OK )
+		{
+			w5100_setMAC( emac->addr );
+			reopen_socket( emac );
+		}
+	}
+	if ( emac->chip_lost && emac->socket_open )
+	{
+		ESP_LOGI( TAG, "W5100 restored" );
+		emac->chip_lost = false;
+	}
+	unlock( emac );
+}
+
 static void emac_w5100_task( void *arg )
 {
 	emac_w5100_t *emac = ( emac_w5100_t * )arg;
 	TickType_t notif_wait_time = portMAX_DELAY;
+	int64_t next_check = 0;
 
 	while ( 1 )
 	{
 		const uint32_t notification_value = ulTaskNotifyTake( pdTRUE, notif_wait_time );
 
 		if ( notification_value == W5100_TSK_RUN )
+		{
 			emac_w5100_poll_rx( emac );
+
+			const int64_t now = esp_timer_get_time();
+			if ( now >= next_check )
+			{
+				emac_w5100_check_chip( emac );
+				next_check = now + W5100_CHECK_US;
+			}
+		}
 		else if ( notification_value == W5100_TSK_HOLD_ON )
 		{
 			ESP_LOGD( TAG, "rx polling paused" );

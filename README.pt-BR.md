@@ -6,9 +6,9 @@ Driver `esp_eth` (MAC/PHY) para o **WIZnet W5100**, o chip do Arduino Ethernet S
 **ESP-IDF 6.x**. Ele se conecta ao `esp_netif`, então tudo que roda sobre o lwIP funciona pelo cabo sem
 mudanças: esp-mqtt, esp_http_client, SNTP, DNS e sockets.
 
-> **Status: 0.1.0.** Compila no ESP-IDF 6.1, conferido pelo CI a cada push. **Ainda não foi testado em
-> hardware.** O primeiro teste num Arduino Ethernet Shield real está pendente. Quando ele passar, a primeira
-> versão validada será a 0.2.0, com o resultado registrado no [CHANGELOG.md](CHANGELOG.md).
+> **Status: 0.1.0.** Compila no ESP-IDF 6.1, conferido pelo CI a cada push. O autoteste abaixo **passa num shield
+> real**, um clone HanRun numa NodeMCU-32S. Os testes de aceitação que faltam estão em
+> [docs/porting-notes.md](docs/porting-notes.md#5-hardware-validation). A primeira versão com tag será a 0.2.0.
 
 ## Por que um driver para o W5100?
 
@@ -66,12 +66,15 @@ O exemplo é um autoteste em seis etapas, cada uma com PASS, FAIL ou SKIP e um r
 | MOSI | ICSP pino 4 | GPIO23 |
 | CS do W5100 | D10 | GPIO17 |
 | CS do cartão SD | D4 | 3V3 (mantém o SD fora do barramento) |
-| 5 V | 5V | VIN / 5V |
+| 5 V | 5V | fonte de 5 V, **não o VIN do ESP32** |
 | GND | GND | GND |
 | RESET | — | **não ligar** (é uma entrada de 5 V do supervisor, veja abaixo) |
 
+**Alimente o shield direto da fonte de 5 V.** Alimentado pelo pino VIN da placa do ESP32, o shield testado quase
+não recebeu quadros, embora o SPI continuasse funcionando e os pedidos de DHCP saíssem.
+
 Nenhum desses pinos do ESP32 tem função de *strapping* no boot. A explicação completa está em
-[docs/wiring.md](docs/wiring.md): as tensões, por que o RESET fica desligado e quais pinos evitar.
+[docs/wiring.md](docs/wiring.md): a alimentação, as tensões, por que o RESET fica desligado e quais pinos evitar.
 
 ## Limitações
 
@@ -79,6 +82,8 @@ Nenhum desses pinos do ESP32 tem função de *strapping* no boot. A explicação
   não funcionam, a não ser em modo promíscuo. IPv4 unicast (TCP, UDP, DHCP, DNS, ICMP) não é afetado.
 - **O link é sempre informado como ativo.** O W5100 não tem registrador de status do PHY, então um cabo
   desconectado não é detectado pelo driver. Use timeouts na aplicação, como o keepalive do MQTT.
+- **O driver restaura o chip, não a conexão.** Se o shield perder a alimentação, o driver restaura o chip em cerca
+  de 2 s, e o TCP se recupera pelos próprios timeouts.
 - **Polling, sem interrupção.** O pino INT não é usado.
 - **Vazão.** O protocolo SPI do W5100 transfere 1 byte por quadro de 32 bits. A 4 MHz isso dá uma estimativa de
   algumas dezenas de kB/s: serve para telemetria e MQTT, não para transferências grandes. Ainda não foi medido.

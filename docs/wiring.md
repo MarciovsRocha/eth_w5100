@@ -22,7 +22,7 @@ The shield's SPI pins are only on the 2×3 **ICSP** header, not on D11–D13. As
 | MOSI | ICSP 4 | **GPIO23** | VSPI native pin |
 | W5100 /SCS | D10 | **GPIO17** | The native VSPI CS is GPIO5, a strapping pin, so GPIO17 is used instead |
 | SD card CS | D4 | **3V3** | Keeps the micro-SD slot deselected. Leave the slot empty |
-| 5 V | 5V (or ICSP 2) | **VIN / 5V** | Feeds the shield's 3.3 V regulator |
+| 5 V | 5V (or ICSP 2) | **a 5 V supply, not the ESP32's VIN** | Feeds the shield's 3.3 V regulator. See [Power](#power) |
 | GND | GND (or ICSP 6) | **GND** | Common ground is required |
 | RESET | ICSP 5 / RESET | **not connected** | See below |
 | INT | D2 via the `INT` solder jumper | not connected | The jumper is open by default, and the driver polls |
@@ -30,6 +30,27 @@ The shield's SPI pins are only on the 2×3 **ICSP** header, not on D11–D13. As
 
 No SEN (SPI enable) wire is needed. The shield generates SEN from /SCS with a 74LVC1G14 inverter, so the W5100
 is in SPI mode exactly while D10 is low.
+
+## Power
+
+**Do not power the shield through the ESP32 board's VIN pin.** Connect it directly to a 5 V supply, and connect
+the ESP32's GND to the shield's GND.
+
+This was measured on a NodeMCU-32S with a HanRun clone, with nothing else changed between the two runs:
+
+| 5 V source of the shield | LAN broadcasts received (20 sent, 72 to 600 bytes) | DHCP |
+|---|---|---|
+| VIN of the ESP32 board, powered over USB | 0 | Fails |
+| Separate 5 V source (an Arduino UNO's 5V pin) | 20 | Address in about 3 s |
+
+With the shield on VIN, SPI still works and frames still leave the chip, so the failure looks like a driver or
+network problem. It also happens with no driver at all: the chip's own TCP/IP answered only 1 of 25 pings. The
+voltages were not measured, so the exact cause on the VIN path is not known. The diode on the ESP32 board and the
+jumper wire are the likely losses.
+
+A shield with its own wires can also start after the ESP32 or lose power while it runs. `eth_init()` returns an
+error if the chip does not answer yet, so call it again later instead of treating this as fatal. Once started,
+the driver checks the chip every 2 s and restores its configuration if it was reset.
 
 ## Why RESET stays unconnected
 
@@ -53,9 +74,9 @@ From the W5100 datasheet (v1.2.8, section 7) and the schematic:
 - **W5100 outputs** come from its 3.3 V supply (VOH ≥ 2.4 V), so MISO is safe for the ESP32.
 - **The 74LVC1G125 buffers** between the bus and the SD card, and the SEN inverter, are powered from the
   shield's **3.3 V** rail.
-- **The 3.3 V rail** comes from an MC33269-3.3 LDO fed by the 5 V pin. Give the shield a real 5 V supply: an ESP32
-  board's VIN when powered over USB (about 4.7 V after its diode) is enough. Plan for roughly 150–200 mA for
-  the shield. This is a typical figure for W5100 shields: the datasheet does not specify supply current.
+- **The 3.3 V rail** comes from an MC33269-3.3 LDO fed by the 5 V pin (an AMS1117 on the tested clone). Plan for
+  roughly 150–200 mA for the shield. This is a typical figure for W5100 shields: the datasheet does not specify
+  supply current.
 
 ## Check before connecting
 

@@ -113,6 +113,11 @@ void w5100_socket_close( void )
 	wiz_w_byte( S0_IR, 0xFF );
 }
 
+bool w5100_socket_is_open( void )
+{
+	return wiz_r_byte( S0_SR ) == SOCK_MACRAW;
+}
+
 esp_err_t w5100_socket_send( const struct w5100_tx_part *const parts, const size_t count )
 {
 	uint32_t total = 0;

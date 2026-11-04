@@ -16,6 +16,8 @@ struct w5100_tx_part
 // Socket 0 in MACRAW mode. mac_filter: receive only frames addressed to our MAC and broadcasts.
 esp_err_t w5100_socket_open( const bool mac_filter );
 void w5100_socket_close( void );
+// False once the chip has lost its configuration, for example after a power loss on the shield.
+bool w5100_socket_is_open( void );
 
 // Writes the parts back to back as one Ethernet frame and waits until the chip has sent it.
 esp_err_t w5100_socket_send( const struct w5100_tx_part *const parts, const size_t count );

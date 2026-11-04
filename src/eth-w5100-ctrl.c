@@ -5,6 +5,8 @@
 #include "esp_timer.h"
 #include "eth-w5100-hal.h"
 #include "eth-w5100-reg.h"
+#include "freertos/FreeRTOS.h"	// IWYU pragma: keep
+#include "freertos/task.h"
 
 static const char *const TAG = "w5100_ctrl";
 
@@ -20,6 +22,9 @@ esp_err_t w5100_init( void )
 			ESP_LOGE( TAG, "W5100 did not leave reset (MR = 0x%02x). Check MISO, power and /RESET", wiz_r_byte( MR0 ) );
 			return ESP_ERR_TIMEOUT;
 		}
+
+	// The reset also restarts the PLL, which takes up to 10 ms to lock (datasheet section 7)
+	vTaskDelay( pdMS_TO_TICKS( 10 ) + 1 );
 
 	// All 8 KB of RX and TX memory to socket 0, the only one used in MACRAW mode
 	wiz_w_byte( RMSR, 3 );

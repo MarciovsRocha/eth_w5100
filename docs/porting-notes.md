@@ -43,6 +43,7 @@ Each change below is checked against the IDF 6.1 sources (`components/esp_eth`) 
 | `eth_deinit()` was only compiled with `CONFIG_TEST_DEINIT` | Declared in the public header, but a link error if used | Always available. It also deletes the netif glue and the event handler |
 | An empty hostname registered a handler with `NULL` | `esp_netif_set_hostname(NULL)` aborted | The handler is registered only when a hostname is given |
 | Missing `<string.h>`/`<stdlib.h>` | Implicit declarations, which are errors on GCC 14 | Added |
+| A chip reset while running was not noticed | After a power loss on the shield the socket stayed closed until the ESP32 restarted | The RX task reads `S0_SR` every 2 s. If the socket is not in MACRAW, it resets the chip, restores the MAC address and reopens the socket |
 | The lower layer (SPI, pins) was only in the author's demo project, with board-specific pins (RESET on strapping pin GPIO12, SEN on GPIO22) | Had to be rewritten for every board | `eth-w5100-spi.h`: a ready-made lower layer with configurable host, CS, RESET, SEN and clock, using polling transactions |
 
 ## 3. Datasheet cross-check (W5100 v1.2.8)
@@ -83,15 +84,26 @@ Each change below is checked against the IDF 6.1 sources (`components/esp_eth`) 
 | `INT` | W5100 /INT, going to an open solder jumper, then D2 | Not used (polling) |
 | OPMODE2–0 | Tied to GND (`000`, autonegotiation) | Link reported as 100 Mbps full duplex; the real result shows only on the LEDs |
 | `/CS`, `/RD`, `/WR` | 10 kΩ pull-up to 3.3 V; address and data bus to GND | The parallel bus is disabled |
-| `+3V3` | MC33269-3.3 LDO from `+5V`. The 3.3 V header pin is not on this net | Power the shield from 5 V only |
+| `+3V3` | MC33269-3.3 LDO from `+5V`. The 3.3 V header pin is not on this net | Power the shield from 5 V only, and not through the ESP32's VIN ([wiring guide](wiring.md#power)) |
 
-## 5. Not verified yet
+## 5. Hardware validation
 
-These need a real W5100. They are the acceptance tests for 0.2.0:
+Hardware: NodeMCU-32S, HanRun W5100 clone with a `511` network on the Ethernet lines, a switch, and the shield on
+a separate 5 V source (an Arduino UNO's 5V pin). The test was on 2026-11-03.
 
-- DHCP and gateway ping with `examples/ethernet_basic`.
-- Sustained TCP traffic (MQTT QoS 1), checking for lost or duplicated frames.
+| Test | Result |
+|---|---|
+| Self-test (SPI, DHCP, ping, DNS, TCP, MQTT) with a broker on the local network | All six stages pass, 10 of 10 reboots. An address arrives in about 3 s |
+| Ping from a PC | 20 of 20, 9 ms on average |
+| LAN broadcasts of 72, 162, 350 and 600 bytes, read every 10 ms by a test firmware without this driver | 20 of 20 |
+| Frame header | The length includes its own 2 bytes: frames are parsed intact |
+| MQTT QoS 1, a backlog of 67 records in 4 batches, each deleted on its PUBACK | All delivered, with no duplicates or gaps |
+
+Still to do for 0.2.0:
+
 - Behaviour when the cable is unplugged and plugged back in. The link is not detected, so TCP must recover by its
   own timeouts.
+- Sustained traffic over many hours.
+- The shield powered on after the ESP32, and losing power while running. Both are implemented, but not tested.
 - Measured throughput and CPU load of the RX task at 4 and 14 MHz.
-- Promiscuous mode on and off at runtime.
+- Promiscuous mode on and off at runtime. Turning it on at startup was tested.
